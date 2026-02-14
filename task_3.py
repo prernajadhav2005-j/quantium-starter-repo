@@ -2,6 +2,7 @@ import pandas as pd
 from dash import Dash, dcc, html, Input, Output
 import plotly.express as px
 
+# ---------- LOAD & CLEAN DATA ----------
 files = [
     "data/daily_sales_data_0.csv",
     "data/daily_sales_data_1.csv",
@@ -17,100 +18,52 @@ df["price"] = df["price"].str.replace("$", "", regex=False).astype(float)
 df["sales"] = df["quantity"] * df["price"]
 df["date"] = pd.to_datetime(df["date"])
 
-price_change_date = pd.to_datetime("2021-01-15")
-df["period"] = df["date"].apply(
-    lambda x: "Before Price Increase" if x < price_change_date else "After Price Increase"
-)
+# Ensure region exists (some datasets lack region)
+if "region" not in df.columns:
+    df["region"] = "all"
 
-# -------------------- DASH APP --------------------
-
+# ---------- DASH APP ----------
 app = Dash(__name__)
 
-app.layout = html.Div(
-    className="main-container",
-    children=[
-        html.H1("🌸 Pink Morsel Sales Dashboard", className="title"),
+app.layout = html.Div([
+    html.H1("Pink Morsel Sales Dashboard", id="main-header", style={"textAlign": "center"}),
 
-        html.Div(
-            className="filter-card",
-            children=[
-                html.H3("Filter by Region", className="filter-title"),
+    html.Div([
+        html.Label("Select Region:"),
+        dcc.RadioItems(
+            id="radio-group",
+            className="radio-group",
+            options=[
+                {"label": "North", "value": "north"},
+                {"label": "South", "value": "south"},
+                {"label": "East", "value": "east"},
+                {"label": "West", "value": "west"},
+                {"label": "All Regions", "value": "all"},
+            ],
+            value="all",
+            inline=True
+        )
+    ], style={"marginBottom": "20px"}),
 
-                dcc.RadioItems(
-                    id="region-filter",
-                    options=[
-                        {"label": " All", "value": "all"},
-                        {"label": " North", "value": "north"},
-                        {"label": " East", "value": "east"},
-                        {"label": " South", "value": "south"},
-                        {"label": " West", "value": "west"},
-                    ],
-                    value="all",
-                    inline=True,
-                    className="radio-group"
-                )
-            ]
-        ),
+    dcc.Graph(id="sales-line-chart")
+])
 
-        html.Div(
-            className="chart-card",
-            children=[
-                dcc.Graph(id="sales-line-chart")
-            ]
-        ),
-
-        html.Div(
-            className="chart-card",
-            children=[
-                dcc.Graph(
-                    figure=px.bar(
-                        df.groupby("period")["sales"].sum().reset_index(),
-                        x="period",
-                        y="sales",
-                        color="period",
-                        title="Total Sales Before vs After Price Increase",
-                        color_discrete_sequence=["#EC4899", "#F472B6"]
-                    )
-                )
-            ]
-        ),
-    ]
-)
-
-
-# -------------------- CALLBACK FOR INTERACTIVE LINE CHART --------------------
-
+# ---------- CALLBACK ----------
 @app.callback(
     Output("sales-line-chart", "figure"),
-    Input("region-filter", "value")
+    Input("radio-group", "value")
 )
-def update_line_chart(selected_region):
-
-    filtered_df = df if selected_region == "all" else df[df["region"].str.lower() == selected_region]
-    daily_sales = filtered_df.groupby("date")["sales"].sum().reset_index()
+def update_line_chart(region):
+    filtered = df if region == "all" else df[df["region"] == region]
 
     fig = px.line(
-        daily_sales,
+        filtered,
         x="date",
         y="sales",
-        markers=True,
-        color_discrete_sequence=["#DB2777"],
-        title=f"Daily Sales Trend — {selected_region.upper()} Region"
+        title=f"Pink Morsel Sales Over Time — Region: {region.capitalize()}",
+        markers=True
     )
-
-    fig.update_layout(
-        plot_bgcolor="#ffffff",
-        paper_bgcolor="#ffffff",
-        font=dict(size=14),
-        title_font=dict(size=22, color="#BE185D"),
-        xaxis_title="Date",
-        yaxis_title="Sales",
-    )
-
     return fig
-
-
-# -------------------- RUN APP --------------------
 
 if __name__ == "__main__":
     app.run(debug=True)
